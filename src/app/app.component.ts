@@ -1,35 +1,96 @@
-import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, AfterViewInit} from "@angular/core";
+import { startWith, switchMap, Subject } from 'rxjs';
+import { NgFor, NgIf } from '@angular/common';
+import { PartitionRaw, TaskSummary } from "@aneoconsultingfr/armonik.api.angular";
+import { PartitionsGrpcService } from "./services/partitions-grpc.service";
+import { RouterLink, RouterLinkActive, RouterModule, RouterOutlet} from "@angular/router";
+import { TasksGrpcService } from "./services/tasks-grpc.service";
+import { TasksListComponent } from "./tasks-list.component";
+import {MatMenuModule} from '@angular/material/menu';
+import {MatButtonModule} from '@angular/material/button';
+
+
 
 @Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [CommonModule],
+  selector:`app-root`,
   template: `
-    <!--The content below is only a placeholder and can be replaced.-->
-    <div style="text-align:center" class="content">
-      <h1>
-        Welcome to {{title}}!
-      </h1>
-      <span style="display: block">{{ title }} app is running!</span>
-      <img width="300" alt="Angular Logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTAgMjUwIj4KICAgIDxwYXRoIGZpbGw9IiNERDAwMzEiIGQ9Ik0xMjUgMzBMMzEuOSA2My4ybDE0LjIgMTIzLjFMMTI1IDIzMGw3OC45LTQzLjcgMTQuMi0xMjMuMXoiIC8+CiAgICA8cGF0aCBmaWxsPSIjQzMwMDJGIiBkPSJNMTI1IDMwdjIyLjItLjFWMjMwbDc4LjktNDMuNyAxNC4yLTEyMy4xTDEyNSAzMHoiIC8+CiAgICA8cGF0aCAgZmlsbD0iI0ZGRkZGRiIgZD0iTTEyNSA1Mi4xTDY2LjggMTgyLjZoMjEuN2wxMS43LTI5LjJoNDkuNGwxMS43IDI5LjJIMTgzTDEyNSA1Mi4xem0xNyA4My4zaC0zNGwxNy00MC45IDE3IDQwLjl6IiAvPgogIDwvc3ZnPg==">
-    </div>
-    <h2>Here are some links to help you start: </h2>
-    <ul>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://angular.io/tutorial">Tour of Heroes</a></h2>
-      </li>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://angular.io/cli">CLI Documentation</a></h2>
-      </li>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://blog.angular.io/">Angular blog</a></h2>
-      </li>
-    </ul>
-    
-  `,
-  styles: [],
+
+  <header class="header">
+    <button mat-button [routerLink]="['/tasks']" routerLinkActive="active">Tasks</button>
+    <button mat-button [routerLink]="['/sessions']" routerLinkActive="active">Sessions</button>
+    <button mat-button [routerLink]="['/results']" routerLinkActive="active">Results</button>
+  </header>
+  <ul>
+    <li *ngFor="let partition of partitions; trackBy:trackByPartition">
+      {{ partition.id }}
+    </li>
+     <div *ngIf="loading">
+         Loading...
+     </div>
+</ul>
+<button (click)="refresh()">Refresh</button>
+<router-outlet></router-outlet>
+
+
+
+
+`, 
+  styles: [`
+     ul {
+      list-style-type: none; 
+     }
+
+     .active{
+      background: indianred;  
+      transition: .3s; 
+       color: #fff; 
+     }
+  `], 
+  standalone: true, 
+  imports: [NgFor, NgIf, RouterLink,RouterModule, RouterLinkActive, RouterOutlet, TasksListComponent, MatButtonModule, MatMenuModule], 
+  providers: [PartitionsGrpcService, TasksGrpcService], 
 })
-export class AppComponent {
-  title = 'armonik-api-angular';
+
+export class AppComponent implements AfterViewInit {
+  
+  #partitionsGrpcService = inject(PartitionsGrpcService); 
+
+  partitions: PartitionRaw.AsObject[] = []
+  loading = true;
+
+  #refresh: Subject<void> = new Subject<void>();
+  tasksList: TaskSummary.AsObject[] = [] 
+
+  
+
+
+  ngAfterViewInit(): void { 
+   
+      this.#refresh.pipe(
+        startWith({}), 
+         switchMap(() => { 
+          this.loading = true; 
+          return this.#partitionsGrpcService.list$();
+        }),
+      )
+      .subscribe(
+        (response) => {
+          console.log(response)
+          this.loading = false; // We hide the loading indicator when the call is done.
+          if (response.partitions) {
+            this.partitions = response.partitions; // We update the partitions list.
+          }
+        }
+      );
+
+  }
+
+  trackByPartition(_index_: number, partition: PartitionRaw.AsObject): string {
+    return partition.id;
+  }
+  
+  refresh(): void {
+      this.#refresh.next()
+  }
+  
 }
